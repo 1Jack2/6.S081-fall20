@@ -113,6 +113,22 @@ found:
     return 0;
   }
 
+  // An empty kernel page table.
+  p->kpagetable = proc_kpagetable();
+  if(p->kpagetable == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  // Map per proc's kstack
+  uint64 va = KSTACK((int) (p - proc));
+  uint64 pa = kwalkaddr(va);
+  if (pa == 0)
+    panic("kstack map fail");
+  if(mappages(p->kpagetable, va, PGSIZE, pa, PTE_R | PTE_W) != 0)
+    panic("kvmmap");
+  
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -139,8 +155,11 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  if(p->kpagetable)
+    proc_freekpagetable(p->kpagetable);
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  p->kpagetable = 0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -193,6 +212,14 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
+}
+
+// Free a process's kernel page table, and *not* free the
+// physical memory it refers to.
+void
+proc_freekpagetable(pagetable_t pagetable)
+{
+  proc_kfreewalk(pagetable);
 }
 
 // a user program that calls exec("/init")
@@ -471,12 +498,15 @@ scheduler(void)
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
+        w_satp(MAKE_SATP((p->kpagetable)));
+        sfence_vma();
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
+        kvminithart();
         c->proc = 0;
 
         found = 1;
