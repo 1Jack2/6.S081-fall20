@@ -77,8 +77,50 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2) {
+    if (p->ticks0 != 0 && p->inhandler == 0) {
+      if (p->ticks0 == ++(p->ticks)) {
+        p->ticks = 0;
+        p->inhandler = 1;
+
+        p->usercontext.epc = p->trapframe->epc;
+        p->usercontext.ra = p->trapframe->ra;
+        p->usercontext.sp = p->trapframe->sp;
+        p->usercontext.gp = p->trapframe->gp;
+        p->usercontext.tp = p->trapframe->tp;
+        p->usercontext.t0 = p->trapframe->t0;
+        p->usercontext.t1 = p->trapframe->t1;
+        p->usercontext.t2 = p->trapframe->t2;
+        p->usercontext.s0 = p->trapframe->s0;
+        p->usercontext.s1 = p->trapframe->s1;
+        p->usercontext.a0 = p->trapframe->a0;
+        p->usercontext.a1 = p->trapframe->a1;
+        p->usercontext.a2 = p->trapframe->a2;
+        p->usercontext.a3 = p->trapframe->a3;
+        p->usercontext.a4 = p->trapframe->a4;
+        p->usercontext.a5 = p->trapframe->a5;
+        p->usercontext.a6 = p->trapframe->a6;
+        p->usercontext.a7 = p->trapframe->a7;
+        p->usercontext.s2 = p->trapframe->s2;
+        p->usercontext.s3 = p->trapframe->s3;
+        p->usercontext.s4 = p->trapframe->s4;
+        p->usercontext.s5 = p->trapframe->s5;
+        p->usercontext.s6 = p->trapframe->s6;
+        p->usercontext.s7 = p->trapframe->s7;
+        p->usercontext.s8 = p->trapframe->s8;
+        p->usercontext.s9 = p->trapframe->s9;
+        p->usercontext.s10 = p->trapframe->s10;
+        p->usercontext.s11 = p->trapframe->s11;
+        p->usercontext.t3 = p->trapframe->t3;
+        p->usercontext.t4 = p->trapframe->t4;
+        p->usercontext.t5 = p->trapframe->t5;
+        p->usercontext.t6 = p->trapframe->t6;
+        
+        p->trapframe->epc = p->handler;
+      }
+    }
     yield();
+  }
 
   usertrapret();
 }
@@ -218,3 +260,57 @@ devintr()
   }
 }
 
+uint64 sys_sigalarm(void)
+{
+  int ticks;
+  uint64 handler;
+  if (argint(0, &ticks) < 0 || argaddr(1, &handler) < 0) {
+    return -1;
+  }
+  struct proc *proc = myproc();
+  proc->ticks0 = ticks;
+  proc->handler = handler;
+  return 0;
+}
+
+uint64 sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  if (p->inhandler == 1) {
+    p->inhandler = 0;
+
+    p->trapframe->epc = p->usercontext.epc;
+    p->trapframe->ra = p->usercontext.ra;
+    p->trapframe->sp = p->usercontext.sp;
+    p->trapframe->gp = p->usercontext.gp;
+    p->trapframe->tp = p->usercontext.tp;
+    p->trapframe->t0 = p->usercontext.t0;
+    p->trapframe->t1 = p->usercontext.t1;
+    p->trapframe->t2 = p->usercontext.t2;
+    p->trapframe->s0 = p->usercontext.s0;
+    p->trapframe->s1 = p->usercontext.s1;
+    p->trapframe->a0 = p->usercontext.a0;
+    p->trapframe->a1 = p->usercontext.a1;
+    p->trapframe->a2 = p->usercontext.a2;
+    p->trapframe->a3 = p->usercontext.a3;
+    p->trapframe->a4 = p->usercontext.a4;
+    p->trapframe->a5 = p->usercontext.a5;
+    p->trapframe->a6 = p->usercontext.a6;
+    p->trapframe->a7 = p->usercontext.a7;
+    p->trapframe->s2 = p->usercontext.s2;
+    p->trapframe->s3 = p->usercontext.s3;
+    p->trapframe->s4 = p->usercontext.s4;
+    p->trapframe->s5 = p->usercontext.s5;
+    p->trapframe->s6 = p->usercontext.s6;
+    p->trapframe->s7 = p->usercontext.s7;
+    p->trapframe->s8 = p->usercontext.s8;
+    p->trapframe->s9 = p->usercontext.s9;
+    p->trapframe->s10 = p->usercontext.s10;
+    p->trapframe->s11 = p->usercontext.s11;
+    p->trapframe->t3 = p->usercontext.t3;
+    p->trapframe->t4 = p->usercontext.t4;
+    p->trapframe->t5 = p->usercontext.t5;
+    p->trapframe->t6 = p->usercontext.t6;
+  }
+  return 0;
+}
