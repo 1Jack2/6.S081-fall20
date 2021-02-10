@@ -47,8 +47,18 @@ sys_sbrk(void)
   if(argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
+  // if (addr + n  > MAXVA) {
+    // printf("MAXVA\n");
+    // myproc()->killed = 1;
+    // return -1;
+  // }
+  if (n >= 0) {
+    myproc()->sz = addr + n;
+  } else {
+    // printf("oldsz: %p, newsz: %p\n", myproc()->sz, myproc()->sz + n);
+    if(growproc(n) < 0)
+      return -1;
+  }
   return addr;
 }
 
