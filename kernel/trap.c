@@ -65,6 +65,13 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (r_scause() == 15) {
+    if (p->killed)
+      exit(-1);
+    uint64 va = r_stval();
+    if (check_cow(p->pagetable, va) != 0) {
+      p->killed = 1;
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
@@ -145,7 +152,7 @@ kerneltrap()
 
   if((which_dev = devintr()) == 0){
     printf("scause %p\n", scause);
-    printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
+    printf("sepc=%p stval=%p pid=%d\n", r_sepc(), r_stval(), myproc()->pid);
     panic("kerneltrap");
   }
 
