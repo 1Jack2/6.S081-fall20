@@ -400,6 +400,30 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  bn -= NINDIRECT;
+
+  if(bn < NDOUBLE_INDIRECT){
+    // Load indirect block, allocating if necessary.
+    if((addr = ip->addrs[NDIRECT + 1]) == 0)
+      ip->addrs[NDIRECT + 1] = addr = balloc(ip->dev);
+
+    bp = bread(ip->dev, addr); // level 1
+    a = (uint*)bp->data;
+    if((addr = a[bn / NINDIRECT]) == 0){
+      a[bn / NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    bp = bread(ip->dev, addr); // leverl 2
+    a = (uint*)bp->data;
+    if ((addr = a[bn % NINDIRECT]) == 0) {
+      a[bn % NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
 
   panic("bmap: out of range");
 }
@@ -430,6 +454,26 @@ itrunc(struct inode *ip)
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  if (ip->addrs[NDIRECT + 1]) {
+    bp = bread(ip->dev, ip->addrs[NDIRECT + 1]);
+    a = (uint*)bp->data;
+    for (j = 0; j < NINDIRECT; j++) {
+      if (a[j]) {
+        struct buf *bp2 = bread(ip->dev, a[j]);
+        uint* a2 = (uint*)bp2->data;
+        for (int k = 0; k < NINDIRECT; k++) {
+          if (a2[k])
+            bfree(ip->dev, a2[k]);
+        }
+        brelse(bp2);
+        bfree(ip->dev, a[j]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT + 1]);
+    ip->addrs[NDIRECT + 1] = 0;
   }
 
   ip->size = 0;
@@ -671,4 +715,28 @@ struct inode*
 nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
+}
+
+// Caller must hold ip->lock.
+// Depth threshold is 10.
+struct inode*
+desym(struct inode *ip, int depth)
+{
+  struct symlinkent se;
+  if (readi(ip, 0, (uint64)&se, 0, sizeof(se)) != sizeof(se)) {
+    panic("desym");
+  }
+  iunlock(ip);
+  if ((ip = namei(se.name)) == 0) {
+    return 0;
+  }
+  ilock(ip);
+  if (ip->type != T_SYMLINK) {
+    return ip;
+  } else if (depth > 10) {
+    iunlockput(ip);
+    return 0;
+  } else {
+    return desym(ip, depth + 1);
+  }
 }

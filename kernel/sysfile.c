@@ -252,7 +252,7 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
+    if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE || ip->type == T_SYMLINK))
       return ip;
     iunlockput(ip);
     return 0;
@@ -320,6 +320,13 @@ sys_open(void)
     iunlockput(ip);
     end_op();
     return -1;
+  }
+  
+  if (ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
+    if ((ip = desym(ip, 0)) == 0) {
+      end_op();
+      return -1;
+    }
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
@@ -483,4 +490,32 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+uint64
+sys_symlink(void)
+{
+  char new[MAXPATH], old[MAXPATH];
+  struct inode *ip;
+  struct symlinkent se;
+
+  if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
+    return -1;
+
+  strncpy(se.name, old, MAXPATH);
+  begin_op();
+
+  if ((ip = create(new, T_SYMLINK, 0, 0)) == 0)
+    goto bad;
+  if (writei(ip, 0, (uint64)&se, 0, sizeof(se)) != sizeof(se)) {
+    panic("symlink: writei");
+  }
+  iunlockput(ip);
+  end_op();
+
+  return 0;
+
+bad:
+  end_op();
+  return -1;
 }
