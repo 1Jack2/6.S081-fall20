@@ -488,6 +488,38 @@ sys_pipe(void)
 uint64
 sys_mmap(void)
 {
+  uint64 addr, offset;
+  int len, prot, flag, fd;
+  struct file *f;
+  struct proc* p = myproc();
+
+  if (argaddr(0, &addr) < 0 || argint(1, &len) < 0 || argint(2, &prot) < 0
+    || argint(3, &flag) < 0 || argfd(4, &fd, &f) < 0 || argaddr(5, &offset) < 0)
+    return -1;
+  if (addr != 0 || offset != 0) {
+    panic("illegal args");
+  }
+  if ((f->writable) && (prot & PROT_WRITE))
+    return -1;
+
+  for (int i = 1; i < VMA_SIZE; i++) {
+    if (p->vma[i].valid == 0) {
+      // set vma
+      p->vma[i].valid = 1;
+      p->vma[i].addr = i * (MAXVA / VMA_SIZE);
+      p->vma[i].len = len;
+      p->vma[i].prot = prot;
+      p->vma[i].flag = flag;
+      p->vma[i].fd = fd;
+
+      // set file
+      filedup(f);
+
+      // printf("mmap: %d, %p\n", i, p->vma[i].addr);
+      return p->vma[i].addr;
+    }
+  }
+
   return -1;
 }
 

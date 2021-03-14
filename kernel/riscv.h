@@ -352,3 +352,7 @@ sfence_vma()
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
+
+// mmap
+#define VMA_SIZE 16
+#define VMA_OFFSET(i, va) (va - (i * (MAXVA / VMA_SIZE)))

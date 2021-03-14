@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -127,6 +128,14 @@ found:
     release(&p->lock);
     return 0;
   }
+
+  // init vma
+  // for (int i = 1; i < VMA_SIZE; i++)
+  //   p->vma[i].valid = 0;
+  // p->vma[0].valid = 1;
+  // p->vma[0].addr = 0; 
+  // p->vma[0].prot = PROT_READ | PROT_WRITE;
+  // p->vma[0].flag = MAP_PRIVATE;
 
   // Set up new context to start executing at forkret,
   // which returns to user space.

@@ -5,6 +5,10 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
+#include "fcntl.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -65,6 +69,47 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (r_scause() == 13 || r_scause() == 15) {
+    uint64 va = r_stval();
+    if (va > MAXVA)
+      exit(-1);
+    int i = va / (MAXVA / VMA_SIZE);
+    if (i == 0 || i >= VMA_SIZE)
+      panic("va");
+
+    if (p->vma[i].valid == 0) {
+      p->killed = 1;
+    } else {
+      char *mem = kalloc();
+      struct file *f;
+      struct vma *pvma;
+      int perm;
+
+      pvma = &p->vma[i];
+      if ((f = p->ofile[pvma->fd]) == 0)
+        exit(-1);
+
+      if (mem != 0) {
+        memset(mem, 0, PGSIZE);
+        va = PGROUNDDOWN(va);
+
+        perm = PTE_U;
+        if (pvma->prot | PROT_READ)
+          perm |= PTE_R;
+        if (pvma->prot | PROT_WRITE) {
+          perm |= PTE_W;
+        }
+        if (mappages(p->pagetable, va, PGSIZE, (uint64)mem, perm) != 0) {
+          kfree(mem);
+          p->killed = 1;
+        }
+        ilock(f->ip);
+        readi(f->ip, 0, (uint64)mem, VMA_OFFSET(i, va), PGSIZE);
+        iunlock(f->ip);
+      } else {
+        p->killed = 1;
+      }
+    } 
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
