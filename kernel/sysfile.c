@@ -499,7 +499,7 @@ sys_mmap(void)
   if (addr != 0 || offset != 0) {
     panic("illegal args");
   }
-  if ((f->writable) && (prot & PROT_WRITE))
+  if ((flag & MAP_SHARED) && !(f->writable) && (prot & PROT_WRITE))
     return -1;
 
   for (int i = 1; i < VMA_SIZE; i++) {
@@ -510,12 +510,13 @@ sys_mmap(void)
       p->vma[i].len = len;
       p->vma[i].prot = prot;
       p->vma[i].flag = flag;
-      p->vma[i].fd = fd;
+      p->vma[i].file = f;
+      p->vma[i].offset = offset;
+      p->vma[i].start = p->vma[i].addr;
 
       // set file
       filedup(f);
 
-      // printf("mmap: %d, %p\n", i, p->vma[i].addr);
       return p->vma[i].addr;
     }
   }
@@ -526,5 +527,36 @@ sys_mmap(void)
 uint64
 sys_munmap(void)
 {
-  return -1;
+  uint64 addr;
+  int len;
+  int i;
+  struct vma *pvma;
+  struct file *f;
+
+  if (argaddr(0, &addr) < 0 || argint(1, &len) < 0)
+    return -1;
+  if (addr > MAXVA)
+    return -1;
+  
+  i = addr / (MAXVA / VMA_SIZE);
+  pvma = &myproc()->vma[i];
+  if (pvma->valid == 0 || addr < pvma->start || addr > pvma->start + pvma->len
+    || addr + len < pvma->start || addr + len > pvma->start + pvma->len)
+    return -1;
+
+  // write back to file
+  f = pvma->file;
+  if (pvma->flag & MAP_SHARED)
+    filewrite(f, addr, len);
+
+  // update pagetable
+  uvmunmap(myproc()->pagetable, addr, len, 1);
+
+  // update vma
+  pvma->start += len;
+  if ((pvma->len -= len) == 0) {
+    fileclose(f);
+    pvma->valid = 0;
+  }
+  return 0;
 }

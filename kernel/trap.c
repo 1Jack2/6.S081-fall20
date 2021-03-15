@@ -75,7 +75,7 @@ usertrap(void)
       exit(-1);
     int i = va / (MAXVA / VMA_SIZE);
     if (i == 0 || i >= VMA_SIZE)
-      panic("va");
+      exit(-1);
 
     if (p->vma[i].valid == 0) {
       p->killed = 1;
@@ -86,19 +86,20 @@ usertrap(void)
       int perm;
 
       pvma = &p->vma[i];
-      if ((f = p->ofile[pvma->fd]) == 0)
-        exit(-1);
+      f = pvma->file;
+      if (f->ref == 0)
+        panic("mmap: usertrap");
 
       if (mem != 0) {
         memset(mem, 0, PGSIZE);
         va = PGROUNDDOWN(va);
 
         perm = PTE_U;
-        if (pvma->prot | PROT_READ)
+        if (pvma->prot & PROT_READ)
           perm |= PTE_R;
-        if (pvma->prot | PROT_WRITE) {
+        if (pvma->prot & PROT_WRITE)
           perm |= PTE_W;
-        }
+
         if (mappages(p->pagetable, va, PGSIZE, (uint64)mem, perm) != 0) {
           kfree(mem);
           p->killed = 1;

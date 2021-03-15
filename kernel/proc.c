@@ -6,6 +6,9 @@
 #include "proc.h"
 #include "defs.h"
 #include "fcntl.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 struct cpu cpus[NCPU];
 
@@ -128,14 +131,6 @@ found:
     release(&p->lock);
     return 0;
   }
-
-  // init vma
-  // for (int i = 1; i < VMA_SIZE; i++)
-  //   p->vma[i].valid = 0;
-  // p->vma[0].valid = 1;
-  // p->vma[0].addr = 0; 
-  // p->vma[0].prot = PROT_READ | PROT_WRITE;
-  // p->vma[0].flag = MAP_PRIVATE;
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -283,6 +278,22 @@ fork(void)
     return -1;
   }
 
+  // copy vma from parent to child.
+  for (int i = 1; i < VMA_SIZE; i++) {
+    if (p->vma[i].valid == 1) {
+      np->vma[i].valid = p->vma[i].valid;
+      np->vma[i].addr = p->vma[i].addr;
+      np->vma[i].len = p->vma[i].len;
+      np->vma[i].prot = p->vma[i].prot;
+      np->vma[i].flag = p->vma[i].flag;
+      np->vma[i].file = p->vma[i].file;
+      np->vma[i].offset = p->vma[i].offset;
+      np->vma[i].start = p->vma[i].start;
+
+      p->vma[i].file->ref++;
+    }
+  }
+
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
@@ -349,9 +360,17 @@ void
 exit(int status)
 {
   struct proc *p = myproc();
+  struct vma *pvma;
 
   if(p == initproc)
     panic("init exiting");
+
+  // mmap: write back to file
+  for (int i = 1; i < VMA_SIZE; i++) {
+    pvma = &p->vma[i];
+    if(pvma->valid && (pvma->flag & MAP_SHARED))
+      filewrite(pvma->file, pvma->start, pvma->len);
+  }
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){

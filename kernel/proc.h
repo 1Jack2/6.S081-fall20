@@ -1,11 +1,15 @@
+struct sleeplock;
+struct file;
+
 struct vma {
   int valid;
   uint64 addr;
   uint64 len;
   int prot;
   int flag;
-  int fd;
+  struct file *file;
   uint64 offset;
+  uint64 start;
 };
 
 // Saved registers for kernel context switches.
