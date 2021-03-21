@@ -116,13 +116,18 @@ exec(char *path, char **argv)
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
+  //copy mapping from proc's user pagetable to proc's kernel pagetable
+  // printf("DEBUG: exec call proc_u2kvmcopy\n");
+  proc_u2kvmcopy(pagetable, p->kpagetable, 0, sz);
+
   if (p->pid == 1)
     vmprint(p->pagetable);
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
  bad:
-  if(pagetable)
+  if(pagetable){
     proc_freepagetable(pagetable, sz);
+  }
   if(ip){
     iunlockput(ip);
     end_op();

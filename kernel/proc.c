@@ -248,6 +248,9 @@ userinit(void)
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
+  // copy mappings from proc's user pagetable to proc's kernel pagetable
+  proc_u2kvmcopy(p->pagetable, p->kpagetable, 0, p->sz);
+
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -273,10 +276,17 @@ growproc(int n)
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    proc_u2kvmcopy(p->pagetable, p->kpagetable, PGROUNDUP(p->sz), sz);
   } else if(n < 0){
+    // uvmunmap(p->kpagetable, 0, PGROUNDUP(sz)/PGSIZE, 0);
+    // TODO: clean kpgtbl
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
+
+  // grow proc's kpagetable
+  // printf("DEBUG: growproc call proc_u2kvmcopy\n");
+
   return 0;
 }
 
@@ -295,7 +305,8 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+  // printf("DEBUG: fork call proc_u2kvmcopy\n");
+  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0 || proc_u2kvmcopy(np->pagetable, np->kpagetable, 0, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
     return -1;

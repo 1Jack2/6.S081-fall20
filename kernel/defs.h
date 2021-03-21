@@ -185,6 +185,10 @@ pagetable_t     proc_kpagetable();
 uint64          kwalkaddr(uint64);
 pagetable_t     proc_kpagetable();
 void            proc_kfreewalk(pagetable_t);
+int             proc_u2kvmcopy(pagetable_t, pagetable_t, uint64, uint64);
+int             copyin_new(pagetable_t, char *, uint64, uint64);
+int             copyinstr_new(pagetable_t, char *, uint64, uint64);
+int             rmappages(pagetable_t, uint64, uint64, uint64, int);
 
 // plic.c
 void            plicinit(void);
