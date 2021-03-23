@@ -110,8 +110,7 @@ e1000_transmit(struct mbuf *m)
       mbuffree((struct mbuf *)PGROUNDDOWN(desc->addr));
     }
     // set CMD field
-    desc->cmd = 0;
-    desc->cmd |= E1000_TXD_CMD_RS;
+    desc->cmd = E1000_TXD_CMD_RS;
     if (m->len < MBUF_SIZE)
       desc->cmd |= E1000_TXD_CMD_EOP;
     // set addr and length
@@ -139,7 +138,6 @@ e1000_recv(void)
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
   struct rx_desc *desc;
-  acquire(&e1000_lock);
   while ((desc = &rx_ring[(regs[E1000_RDT] + 1) % RX_RING_SIZE])->status & E1000_RXD_STAT_DD) {
     struct mbuf *old, *new;
     old = mbufalloc(0);
@@ -147,7 +145,7 @@ e1000_recv(void)
       panic("e1000");
     old->len = desc->length;
     old->head = (char *)desc->addr;
-    release(&e1000_lock);
+
     net_rx(old);
 
     new = mbufalloc(0);
@@ -157,9 +155,7 @@ e1000_recv(void)
     desc->status = 0;
 
     regs[E1000_RDT] = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
-    acquire(&e1000_lock);
   }
-  release(&e1000_lock);
 }
 
 void
